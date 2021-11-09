@@ -9,10 +9,19 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-df_result = pd.read_csv(
-    "csv/dfresult.csv", index_col=[0], header=[0, 1], skipinitialspace=True
-)
-df_timeseries_f1 = pd.read_csv("csv/dftimeseriesf1.csv", index_col=[0], parse_dates=[0])
+
+@st.cache
+def load_df():
+    df_result = pd.read_csv(
+        "csv/dfresult.csv", index_col=[0], header=[0, 1], skipinitialspace=True
+    )
+    df_timeseries_f1 = pd.read_csv(
+        "csv/dftimeseriesf1.csv", index_col=[0], parse_dates=[0]
+    )
+    return df_result, df_timeseries_f1
+
+
+df_result, df_timeseries_f1 = load_df()
 
 locs = df_result.columns.get_level_values(0).unique().to_list()
 if "index" not in st.session_state:

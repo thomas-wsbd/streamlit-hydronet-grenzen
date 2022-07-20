@@ -15,23 +15,28 @@ def load_df():
     df_result = pd.read_csv(
         "csv/dfresult.csv", index_col=[0], header=[0, 1], skipinitialspace=True
     )
-    df_timeseries_f1 = pd.read_csv(
-        "csv/dftimeseriesf1.csv", index_col=[0], parse_dates=[0]
-    )
-    return df_result, df_timeseries_f1
+    df_timeseries = pd.read_csv("csv/dftimeseries.csv", index_col=[0], parse_dates=[0])
+    return df_result, df_timeseries
 
 
-df_result, df_timeseries_f1 = load_df()
+df_result, df_timeseries = load_df()
 
-locs = df_result.columns.get_level_values(0).unique().to_list()
+df_result_dt = pd.DataFrame(
+    index=pd.date_range(start="2018-01-01", end="2022-07-01"), columns=df_result.columns
+)
+for year in df_result_dt.index.year.unique():
+    dfr = df_result.copy()
+    dfr.index = pd.to_datetime(year * 1000 + df_result.index, format="%Y%j")
+    df_result_dt.fillna(dfr, inplace=True)
+df_timeseries = df_timeseries["2018-01-01":"2022-07-01"]
+
+locs = sorted(df_result.columns.get_level_values(0).unique().to_list())
 if "index" not in st.session_state:
     st.session_state.index = 0
-years = list(range(2000, 2022))
 
 st.title("Grenzen HydroNET Provinciaal Meetnet - App")
 controls = st.sidebar
 loc = controls.selectbox("Meetpunt", options=locs, index=0)
-year = controls.selectbox("Referentie jaar", options=years, index=21)
 
 button_next = controls.button("Volgende meetpunt")
 button_back = controls.button("Vorige meetpunt")
@@ -45,18 +50,35 @@ if button_back:
     loc = locs[st.session_state.index]
 
 if loc:
-    fig = px.line(
-        df_result[loc],
+    df_temp = df_result_dt[loc]
+    df_temp.columns = ["droog", "matig droog", "normaal", "matig nat"]
+    df_loc = df_temp.diff(axis="columns")
+    df_loc["droog"] = df_temp["droog"]
+    df_loc = df_loc.apply(pd.to_numeric, errors="coerce")  # convert columns to numeric
+    df_loc["nat"] = 100.0
+
+    fig = px.area(
+        df_loc,
         title=loc,
-        labels={"value": "Stijghoogte (mNAP", "DateTime": "Dagnummer"},
+        range_y=[int(df_timeseries[loc].min() - 1), int(df_timeseries[loc].max() + 2)],
+        range_x=["2018-01-01", "2022-07-01"],
+        labels={"value": "Stijghoogte (mNAP)"},
+        color_discrete_sequence=[
+            "red",
+            "orange",
+            "lightgreen",
+            "lightblue",
+            "blue",
+            "navy",
+        ],
         height=600,
     )
-    if year:
-        df_ref = df_timeseries_f1.loc[str(year)]
-        df_ref.index = df_ref.index.dayofyear
-        fig.append_trace(
-            px.scatter(df_ref[loc], color_discrete_sequence=["black"])["data"][0], 1, 1
-        )
+
+    fig.append_trace(
+        px.scatter(df_timeseries[loc], color_discrete_sequence=["black"])["data"][0],
+        1,
+        1,
+    )
 
     st.plotly_chart(
         fig,
